@@ -27,8 +27,8 @@ class _JoystickWidgetState extends State<JoystickWidget> {
     final radius = size.shortestSide / 2 - 18;
     final delta = localPosition - center;
     final clamped = Offset(
-      delta.dx.clamp(-radius, radius),
-      delta.dy.clamp(-radius, radius),
+      delta.dx.clamp(-radius, radius).toDouble(),
+      delta.dy.clamp(-radius, radius).toDouble(),
     );
     final normalized = Offset(clamped.dx / radius, -clamped.dy / radius);
 

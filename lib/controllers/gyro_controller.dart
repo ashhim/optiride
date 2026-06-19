@@ -14,17 +14,16 @@ class GyroController extends ChangeNotifier {
   AccelerometerEvent? _baseline;
   double _tiltX = 0;
   double _tiltY = 0;
-  DriveDirection _drive = DriveDirection.neutral;
   SteerDirection _steer = SteerDirection.neutral;
   Timer? _debounce;
   int _toggleRevision = 0;
+  bool _manualSteerOverride = false;
 
   bool get enabled => _enabled;
   double get sensitivity => _sensitivity;
   double get deadZone => _deadZone;
   double get tiltX => _tiltX;
   double get tiltY => _tiltY;
-  DriveDirection get drive => _drive;
   SteerDirection get steer => _steer;
 
   void bind(MotionController motion) {
@@ -37,17 +36,39 @@ class GyroController extends ChangeNotifier {
   }
 
   void setSensitivity(double value) {
-    _sensitivity = value.clamp(0.7, 2.0);
+    _sensitivity = value.clamp(0.7, 2.0).toDouble();
     notifyListeners();
   }
 
   void setDeadZone(double value) {
-    _deadZone = value.clamp(0.05, 0.35);
+    _deadZone = value.clamp(0.05, 0.35).toDouble();
     notifyListeners();
   }
 
+  void setManualSteerOverride(bool value) {
+    if (_manualSteerOverride == value) return;
+    _manualSteerOverride = value;
+    if (value) {
+      _debounce?.cancel();
+      _debounce = null;
+    } else {
+      _steer = SteerDirection.neutral;
+      notifyListeners();
+    }
+  }
+
   Future<void> setEnabled(bool enabled) async {
-    if (_enabled == enabled) return;
+    if (_enabled == enabled) {
+      if (!enabled) {
+        final subscription = _subscription;
+        _subscription = null;
+        _debounce?.cancel();
+        _debounce = null;
+        await subscription?.cancel();
+        await _motion?.stopSteer();
+      }
+      return;
+    }
     final revision = ++_toggleRevision;
     _enabled = enabled;
     _baseline = null;
@@ -55,12 +76,12 @@ class GyroController extends ChangeNotifier {
     _debounce = null;
     _tiltX = 0;
     _tiltY = 0;
-    _drive = DriveDirection.neutral;
     _steer = SteerDirection.neutral;
+    _manualSteerOverride = false;
     notifyListeners();
 
     if (enabled) {
-      await _motion?.stopAll();
+      await _motion?.stopSteer();
       await _subscription?.cancel();
       if (revision != _toggleRevision || !_enabled) return;
       _subscription = null;
@@ -72,7 +93,7 @@ class GyroController extends ChangeNotifier {
     _subscription = null;
     await subscription?.cancel();
     if (revision != _toggleRevision || _enabled) return;
-    await _motion?.stopAll();
+    await _motion?.stopSteer();
   }
 
   void calibrate() {
@@ -90,19 +111,15 @@ class GyroController extends ChangeNotifier {
     _tiltY = driveSignalRaw * _sensitivity;
     _tiltX = steerSignalRaw * _sensitivity;
 
-    final nextDrive = _driveForSignal(_tiltY);
+    if (_manualSteerOverride) {
+      return;
+    }
+
     final nextSteer = _steerForSignal(_tiltX);
 
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 120), () {
       if (!_enabled) return;
-      if (nextDrive != _drive) {
-        _drive = nextDrive;
-        final motion = _motion;
-        if (motion != null) {
-          unawaited(motion.setDrive(nextDrive));
-        }
-      }
       if (nextSteer != _steer) {
         _steer = nextSteer;
         final motion = _motion;
@@ -112,11 +129,6 @@ class GyroController extends ChangeNotifier {
       }
       notifyListeners();
     });
-  }
-
-  DriveDirection _driveForSignal(double value) {
-    if (value.abs() < _deadZone) return DriveDirection.neutral;
-    return value > 0 ? DriveDirection.forward : DriveDirection.backward;
   }
 
   SteerDirection _steerForSignal(double value) {

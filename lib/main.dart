@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'controllers/connection_controller.dart';
 import 'controllers/gyro_controller.dart';
+import 'controllers/hud_settings_controller.dart';
 import 'controllers/joystick_controller.dart';
 import 'controllers/light_controller.dart';
 import 'controllers/motion_controller.dart';
@@ -28,6 +29,7 @@ class OptiRideApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ConnectionController()),
+        ChangeNotifierProvider(create: (_) => HudSettingsController()),
         ProxyProvider<ConnectionController, ApiService>(
           update: (_, connection, api) {
             final service = api ?? ApiService();

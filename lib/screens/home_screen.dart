@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -8,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import '../controllers/connection_controller.dart';
 import '../controllers/gyro_controller.dart';
+import '../controllers/hud_settings_controller.dart';
+import '../controllers/joystick_controller.dart';
 import '../controllers/light_controller.dart';
 import '../controllers/motion_controller.dart';
 import '../services/stream_service.dart';
@@ -34,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late MotionController _motion;
   late LightController _light;
   late GyroController _gyro;
+  late JoystickController _joystick;
+  late HudSettingsController _hudSettings;
   late StreamService _streamService;
 
   bool _driveForwardHeld = false;
@@ -54,6 +57,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _motion = context.read<MotionController>();
     _light = context.read<LightController>();
     _gyro = context.read<GyroController>();
+    _joystick = context.read<JoystickController>();
+    _hudSettings = context.read<HudSettingsController>();
     _streamService = context.read<StreamService>();
     if (!_listening) {
       _connection.addListener(_handleConnectionChanged);
@@ -71,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _focusNode.dispose();
     unawaited(_motion.stopAll());
     unawaited(_gyro.setEnabled(false));
+    unawaited(_joystick.release());
     super.dispose();
   }
 
@@ -90,7 +96,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     if (!_connection.connected) {
       _streamService.setBaseUri(null);
+      _driveForwardHeld = false;
+      _driveBackwardHeld = false;
+      _steerLeftHeld = false;
+      _steerRightHeld = false;
+      _keysDown.clear();
       unawaited(_motion.stopAll());
+      unawaited(_joystick.release());
+      _gyro.setManualSteerOverride(false);
     }
     if (_ipController.text != _connection.input) {
       _ipController.text = _connection.input;
@@ -110,35 +123,70 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _setGyroEnabled(bool value) async {
+    _steerLeftHeld = false;
+    _steerRightHeld = false;
+    _keysDown.remove(LogicalKeyboardKey.arrowLeft);
+    _keysDown.remove(LogicalKeyboardKey.keyA);
+    _keysDown.remove(LogicalKeyboardKey.arrowRight);
+    _keysDown.remove(LogicalKeyboardKey.keyD);
+    if (value) {
+      _hudSettings.setSingleJoystickMode(false);
+      await _joystick.release();
+    }
+    await _gyro.setEnabled(value);
+    _gyro.setManualSteerOverride(false);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _setSingleJoystickMode(bool value) async {
+    _hudSettings.setSingleJoystickMode(value);
+    _driveForwardHeld = false;
+    _driveBackwardHeld = false;
+    _steerLeftHeld = false;
+    _steerRightHeld = false;
+    _keysDown.clear();
+    if (value) {
+      await _setGyroEnabled(false);
+    } else {
+      await _joystick.release();
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _openSettings() async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SettingsPanel(
-        ipController: _ipController,
-        connected: _connection.connected,
-        statusText: _connection.statusText,
-        onConnect: _connect,
-        gyroEnabled: _gyro.enabled,
-        onGyroChanged: (value) {
-          unawaited(_gyro.setEnabled(value));
-          if (mounted) setState(() {});
-        },
-        gyroSensitivity: _gyro.sensitivity,
-        onSensitivityChanged: (value) {
-          _gyro.setSensitivity(value);
-          if (mounted) setState(() {});
-        },
-        gyroDeadZone: _gyro.deadZone,
-        onDeadZoneChanged: (value) {
-          _gyro.setDeadZone(value);
-          if (mounted) setState(() {});
-        },
-        onCalibrateGyro: () {
-          _gyro.calibrate();
-          if (mounted) setState(() {});
-        },
+      builder: (context) => Consumer2<GyroController, HudSettingsController>(
+        builder: (context, gyro, hudSettings, _) => SettingsPanel(
+          ipController: _ipController,
+          connected: _connection.connected,
+          statusText: _connection.statusText,
+          onConnect: _connect,
+          gyroEnabled: gyro.enabled,
+          onGyroChanged: (value) {
+            unawaited(_setGyroEnabled(value));
+          },
+          gyroSensitivity: gyro.sensitivity,
+          onSensitivityChanged: gyro.setSensitivity,
+          gyroDeadZone: gyro.deadZone,
+          onDeadZoneChanged: gyro.setDeadZone,
+          onCalibrateGyro: gyro.calibrate,
+          singleJoystickMode: hudSettings.singleJoystickMode,
+          onSingleJoystickModeChanged: (value) {
+            unawaited(_setSingleJoystickMode(value));
+          },
+          buttonScale: hudSettings.buttonScale,
+          onButtonScaleChanged: hudSettings.setButtonScale,
+          buttonOpacity: hudSettings.buttonOpacity,
+          onButtonOpacityChanged: hudSettings.setButtonOpacity,
+          edgeInset: hudSettings.edgeInset,
+          onEdgeInsetChanged: hudSettings.setEdgeInset,
+          bottomOffset: hudSettings.bottomOffset,
+          onBottomOffsetChanged: hudSettings.setBottomOffset,
+        ),
       ),
     );
   }
@@ -151,6 +199,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _steerLeftHeld = false;
     _steerRightHeld = false;
     _keysDown.clear();
+    _gyro.setManualSteerOverride(false);
+    await _joystick.release();
     await _motion.stopAll();
   }
 
@@ -183,6 +233,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else {
       await _motion.stopSteer();
     }
+
+    _gyro.setManualSteerOverride(_gyro.enabled && (left || right));
   }
 
   Future<void> _pressDriveForward() async {
@@ -265,28 +317,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final hudSettings = context.watch<HudSettingsController>();
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final portrait = constraints.maxHeight >= constraints.maxWidth;
-        final screenWidth = constraints.maxWidth;
+        _gyro.setOrientationLandscape(!portrait);
         final shortest = constraints.maxWidth < constraints.maxHeight
             ? constraints.maxWidth
             : constraints.maxHeight;
-        final controlSize = portrait
-            ? (shortest * 0.18).clamp(60.0, 74.0)
-            : (shortest * 0.13).clamp(54.0, 66.0);
-        final actionSize = portrait
-            ? (shortest * 0.16).clamp(56.0, 66.0)
-            : (shortest * 0.11).clamp(50.0, 60.0);
-        final horizontalInset = portrait ? 16.0 : 28.0;
-        final controlBottom = portrait ? 94.0 : 22.0;
+        final controlSize = (portrait
+            ? (shortest * 0.18).clamp(60.0, 74.0).toDouble()
+            : (shortest * 0.13).clamp(54.0, 66.0).toDouble()) *
+            hudSettings.buttonScale;
+        final actionSize = (portrait
+            ? (shortest * 0.16).clamp(56.0, 66.0).toDouble()
+            : (shortest * 0.11).clamp(50.0, 60.0).toDouble()) *
+            hudSettings.buttonScale;
+        final horizontalInset = (portrait ? 16.0 : 28.0) + hudSettings.edgeInset;
+        final controlBottom = ((portrait ? 94.0 : 22.0) + hudSettings.bottomOffset)
+            .clamp(12.0, constraints.maxHeight * 0.46)
+            .toDouble();
         final controlSpacing = portrait ? 12.0 : 18.0;
-        final speedGaugeSize = portrait
-            ? (shortest * 0.30).clamp(104.0, 132.0)
-            : (shortest * 0.34).clamp(118.0, 168.0);
-        final miniMapSize = portrait
-            ? (shortest * 0.15).clamp(48.0, 60.0)
-            : (shortest * 0.16).clamp(62.0, 82.0);
+        final joystickSize = (portrait
+                ? (shortest * 0.34).clamp(118.0, 156.0).toDouble()
+                : (shortest * 0.26).clamp(116.0, 144.0).toDouble()) *
+            hudSettings.buttonScale;
 
         return Scaffold(
           body: Focus(
@@ -308,24 +364,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           statusText: _connection.statusText,
                         ),
                         const Spacer(),
-                        if (!portrait || screenWidth > 560) const _RaceTimer(),
-                        if (!portrait || screenWidth > 560) const Spacer(),
-                        if (!portrait || screenWidth > 560) ...[
-                          _MiniMapHud(size: miniMapSize),
-                          const SizedBox(width: 10),
-                        ],
-                        SettingsIconButton(onPressed: _openSettings),
+                        SettingsIconButton(
+                          onPressed: _openSettings,
+                          opacity: hudSettings.buttonOpacity,
+                        ),
                       ],
                     ),
                   ),
                 ),
-                if (portrait && screenWidth > 520)
-                  const Positioned(
-                    top: 18,
-                    left: 0,
-                    right: 0,
-                    child: SafeArea(child: Center(child: _RaceTimer())),
-                  ),
                 Positioned.fill(
                   child: IgnorePointer(
                     ignoring: true,
@@ -344,77 +390,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                Positioned(
-                  left: portrait ? 18 : 28,
-                  top: portrait ? 112 : 96,
-                  child: _SpeedGauge(size: speedGaugeSize),
-                ),
-                if (!portrait)
+                if (hudSettings.singleJoystickMode)
                   Positioned(
-                    right: 32,
-                    bottom: 94,
-                    child: _PedalMeter(size: speedGaugeSize * 0.64),
-                  ),
-                Positioned(
-                  left: horizontalInset,
-                  bottom: controlBottom,
-                  child: _RaceControlPair(
-                    vertical: portrait,
-                    spacing: controlSpacing,
-                    first: ControlButton(
-                      icon: Icons.keyboard_arrow_up_rounded,
-                      label: 'UP',
-                      onDown: _pressDriveForward,
-                      onUp: _releaseDriveForward,
-                      width: controlSize,
-                      height: controlSize,
-                      iconSize: controlSize * 0.54,
-                      circular: true,
-                      showLabel: false,
+                    left: horizontalInset,
+                    bottom: controlBottom,
+                    child: Consumer<JoystickController>(
+                      builder: (context, joystick, _) => _JoystickPad(
+                        size: joystickSize,
+                        joystick: joystick,
+                        opacity: hudSettings.buttonOpacity,
+                      ),
                     ),
-                    second: ControlButton(
-                      icon: Icons.keyboard_arrow_down_rounded,
-                      label: 'DOWN',
-                      onDown: _pressDriveBackward,
-                      onUp: _releaseDriveBackward,
-                      width: controlSize,
-                      height: controlSize,
-                      iconSize: controlSize * 0.54,
-                      circular: true,
-                      showLabel: false,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: horizontalInset,
-                  bottom: controlBottom,
-                  child: _RaceControlPair(
-                    vertical: portrait,
-                    spacing: controlSpacing,
-                    first: ControlButton(
-                      icon: Icons.keyboard_arrow_left_rounded,
-                      label: 'LEFT',
-                      onDown: _pressSteerLeft,
-                      onUp: _releaseSteerLeft,
-                      width: controlSize,
-                      height: controlSize,
-                      iconSize: controlSize * 0.54,
-                      circular: true,
-                      showLabel: false,
-                    ),
-                    second: ControlButton(
-                      icon: Icons.keyboard_arrow_right_rounded,
-                      label: 'RIGHT',
-                      onDown: _pressSteerRight,
-                      onUp: _releaseSteerRight,
-                      width: controlSize,
-                      height: controlSize,
-                      iconSize: controlSize * 0.54,
-                      circular: true,
-                      showLabel: false,
+                  )
+                else ...[
+                  Positioned(
+                    left: horizontalInset,
+                    bottom: controlBottom,
+                    child: _RaceControlPair(
+                      vertical: true,
+                      spacing: controlSpacing,
+                      first: ControlButton(
+                        icon: Icons.keyboard_arrow_up_rounded,
+                        label: 'UP',
+                        onDown: _pressDriveForward,
+                        onUp: _releaseDriveForward,
+                        width: controlSize,
+                        height: controlSize,
+                        iconSize: controlSize * 0.54,
+                        circular: true,
+                        showLabel: false,
+                        opacity: hudSettings.buttonOpacity,
+                      ),
+                      second: ControlButton(
+                        icon: Icons.keyboard_arrow_down_rounded,
+                        label: 'DOWN',
+                        onDown: _pressDriveBackward,
+                        onUp: _releaseDriveBackward,
+                        width: controlSize,
+                        height: controlSize,
+                        iconSize: controlSize * 0.54,
+                        circular: true,
+                        showLabel: false,
+                        opacity: hudSettings.buttonOpacity,
+                      ),
                     ),
                   ),
-                ),
+                  Positioned(
+                    right: horizontalInset,
+                    bottom: controlBottom,
+                    child: _RaceControlPair(
+                      vertical: true,
+                      spacing: controlSpacing,
+                      first: ControlButton(
+                        icon: Icons.keyboard_arrow_left_rounded,
+                        label: 'LEFT',
+                        onDown: _pressSteerLeft,
+                        onUp: _releaseSteerLeft,
+                        width: controlSize,
+                        height: controlSize,
+                        iconSize: controlSize * 0.54,
+                        circular: true,
+                        showLabel: false,
+                        opacity: hudSettings.buttonOpacity,
+                      ),
+                      second: ControlButton(
+                        icon: Icons.keyboard_arrow_right_rounded,
+                        label: 'RIGHT',
+                        onDown: _pressSteerRight,
+                        onUp: _releaseSteerRight,
+                        width: controlSize,
+                        height: controlSize,
+                        iconSize: controlSize * 0.54,
+                        circular: true,
+                        showLabel: false,
+                        opacity: hudSettings.buttonOpacity,
+                      ),
+                    ),
+                  ),
+                ],
                 Positioned(
                   left: 0,
                   right: 0,
@@ -426,6 +479,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         buttonSize: actionSize,
                         onStop: _stopAll,
                         onLight: _toggleLight,
+                        opacity: hudSettings.buttonOpacity,
                       ),
                     ),
                   ),
@@ -512,9 +566,9 @@ class _HudHeader extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: const Color(0x7A09111D),
+            color: const Color(0x5609111D),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0x2236E6C5)),
+            border: Border.all(color: const Color(0x1836E6C5)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -555,154 +609,71 @@ class _HudHeader extends StatelessWidget {
   }
 }
 
-class _RaceTimer extends StatelessWidget {
-  const _RaceTimer();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0x2236E6C5)),
-          ),
-          child: const Text(
-            '00:00:00',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.0,
-              shadows: [
-                Shadow(color: Color(0xFF06110F), blurRadius: 4, offset: Offset(0, 2)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniMapHud extends StatelessWidget {
-  const _MiniMapHud({
+class _JoystickPad extends StatelessWidget {
+  const _JoystickPad({
     required this.size,
+    required this.joystick,
+    required this.opacity,
   });
 
   final double size;
+  final JoystickController joystick;
+  final double opacity;
 
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.black.withValues(alpha: 0.15),
-            border: Border.all(color: const Color(0xAA37F5DF), width: 1.2),
-            boxShadow: const [
-              BoxShadow(color: Color(0x6637F5DF), blurRadius: 18),
-            ],
-          ),
-          child: CustomPaint(painter: _MiniMapPainter()),
-        ),
-      ),
-    );
+  void _updateFromLocal(Offset localPosition) {
+    final radius = size / 2;
+    final center = Offset(radius, radius);
+    final raw = localPosition - center;
+    final limited = raw.distance > radius ? Offset.fromDirection(raw.direction, radius) : raw;
+    joystick.updateNormalized(Offset(limited.dx / radius, -limited.dy / radius));
   }
-}
-
-class _SpeedGauge extends StatelessWidget {
-  const _SpeedGauge({
-    required this.size,
-  });
-
-  final double size;
 
   @override
   Widget build(BuildContext context) {
-    final dialSize = size * 0.58;
-    return IgnorePointer(
-      child: SizedBox(
-        width: size,
-        height: size * 1.28,
+    final radius = size / 2;
+    final knobSize = size * 0.34;
+    final knobOffset = Offset(
+      radius + joystick.normalized.dx * radius * 0.64 - knobSize / 2,
+      radius - joystick.normalized.dy * radius * 0.64 - knobSize / 2,
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (details) => _updateFromLocal(details.localPosition),
+      onPanUpdate: (details) => _updateFromLocal(details.localPosition),
+      onPanEnd: (_) => unawaited(joystick.release()),
+      onPanCancel: () => unawaited(joystick.release()),
+      child: SizedBox.square(
+        dimension: size,
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
-            Positioned.fill(child: CustomPaint(painter: _SpeedGaugePainter())),
-            Positioned(
-              left: size * 0.23,
-              top: size * 0.45,
-              child: Container(
-                width: dialSize,
-                height: dialSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0x55071D22),
-                  border: Border.all(color: const Color(0xAA37F5DF), width: 1.1),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x7737F5DF), blurRadius: 18),
-                  ],
-                ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '207',
-                      style: TextStyle(
-                        color: Color(0xFF6DFFF0),
-                        fontSize: 25,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w800,
-                        height: 0.95,
-                      ),
-                    ),
-                    Text(
-                      'km/h',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        height: 1.0,
-                      ),
-                    ),
-                  ],
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _JoystickPainter(
+                  active: joystick.normalized.distance > 0.05,
+                  opacity: opacity,
                 ),
               ),
             ),
             Positioned(
-              left: 0,
-              bottom: size * 0.03,
-              child: _TinyTelemetry(label: '0543', sublabel: 'HP'),
-            ),
-            Positioned(
-              left: size * 0.46,
-              bottom: 0,
+              left: knobOffset.dx,
+              top: knobOffset.dy,
               child: Container(
-                width: size * 0.20,
-                height: size * 0.20,
-                alignment: Alignment.center,
+                width: knobSize,
+                height: knobSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0x661B1308),
-                  border: Border.all(color: const Color(0xFFFF9440), width: 1.1),
-                  boxShadow: const [BoxShadow(color: Color(0x66FF9440), blurRadius: 12)],
-                ),
-                child: const Text(
-                  '3',
-                  style: TextStyle(
-                    color: Color(0xFFFFB15E),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF9EFFF2).withValues(alpha: 0.55),
+                      const Color(0xFF1DE9B6).withValues(alpha: 0.18),
+                      Colors.black.withValues(alpha: 0.18),
+                    ],
                   ),
+                  border: Border.all(color: const Color(0xCC6DFFF0), width: 1.4),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0xAA1DE9B6), blurRadius: 22),
+                  ],
                 ),
               ),
             ),
@@ -713,215 +684,45 @@ class _SpeedGauge extends StatelessWidget {
   }
 }
 
-class _TinyTelemetry extends StatelessWidget {
-  const _TinyTelemetry({
-    required this.label,
-    required this.sublabel,
+class _JoystickPainter extends CustomPainter {
+  const _JoystickPainter({
+    required this.active,
+    required this.opacity,
   });
 
-  final String label;
-  final String sublabel;
+  final bool active;
+  final double opacity;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0x55071D22),
-        border: Border.all(color: const Color(0xAA37F5DF), width: 1),
-        boxShadow: const [BoxShadow(color: Color(0x5537F5DF), blurRadius: 10)],
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF6DFFF0),
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-          Text(
-            sublabel,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 7,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PedalMeter extends StatelessWidget {
-  const _PedalMeter({
-    required this.size,
-  });
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: SizedBox.square(
-        dimension: size,
-        child: CustomPaint(painter: _PedalMeterPainter()),
-      ),
-    );
-  }
-}
-
-class _MiniMapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final radius = size.shortestSide / 2;
-    final cyan = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = const Color(0xAA37F5DF);
-    final dim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.24);
-
-    canvas.drawCircle(center, radius * 0.74, dim);
-    canvas.drawLine(Offset(center.dx, radius * 0.18), Offset(center.dx, radius * 1.55), dim);
-    canvas.drawLine(Offset(radius * 0.25, center.dy), Offset(radius * 1.55, center.dy), dim);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius * 0.82),
-      -math.pi * 0.70,
-      math.pi * 1.25,
-      false,
-      cyan,
-    );
-
-    final route = Path()
-      ..moveTo(radius * 0.58, radius * 0.18)
-      ..quadraticBezierTo(radius * 1.03, radius * 0.62, radius * 0.87, radius * 1.06)
-      ..quadraticBezierTo(radius * 0.78, radius * 1.34, radius * 1.18, radius * 1.65);
-    canvas.drawPath(
-      route,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..color = Colors.white.withValues(alpha: 0.62),
-    );
-
-    final arrow = Path()
-      ..moveTo(center.dx, center.dy - radius * 0.20)
-      ..lineTo(center.dx - radius * 0.14, center.dy + radius * 0.18)
-      ..lineTo(center.dx + radius * 0.14, center.dy + radius * 0.18)
-      ..close();
-    canvas.drawPath(
-      arrow,
-      Paint()
-        ..color = const Color(0xFFFFE84B)
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _SpeedGaugePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final radius = size.width * 0.53;
-    final center = Offset(size.width * 0.57, size.height * 0.57);
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    const start = math.pi * 0.82;
-    const sweep = math.pi * 1.18;
-
-    final glowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.butt
-      ..color = const Color(0x5537F5DF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawArc(rect, start, sweep * 0.68, false, glowPaint);
-
-    for (var i = 0; i < 23; i++) {
-      final segmentStart = start + (sweep / 24) * i;
-      final paint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = i > 17 ? 8 : 5
-        ..strokeCap = StrokeCap.butt
-        ..color = i > 17
-            ? const Color(0xFFFF2E48)
-            : i % 5 == 0
-                ? Colors.black.withValues(alpha: 0.78)
-                : const Color(0xFF39F7DE);
-      canvas.drawArc(rect, segmentStart, sweep / 38, false, paint);
-    }
-
-    final needleAngle = start + sweep * 0.62;
-    final needleEnd = Offset(
-      center.dx + math.cos(needleAngle) * radius * 0.72,
-      center.dy + math.sin(needleAngle) * radius * 0.72,
-    );
-    canvas.drawLine(
-      center,
-      needleEnd,
-      Paint()
-        ..strokeWidth = 2.4
-        ..strokeCap = StrokeCap.round
-        ..color = const Color(0xFFFF2E48),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PedalMeterPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.shortestSide / 2;
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = const Color(0x9937F5DF);
+    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
     final glow = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 9
-      ..color = const Color(0x4437F5DF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9);
+      ..strokeWidth = active ? 9 : 6
+      ..color = const Color(0x6637F5DF).withValues(alpha: 0.16 + (0.28 * normalizedOpacity))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = const Color(0xAA37F5DF).withValues(alpha: 0.28 + (0.52 * normalizedOpacity));
+    final axis = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.white.withValues(alpha: 0.10 + (0.18 * normalizedOpacity));
 
-    canvas.drawCircle(center, radius * 0.82, glow);
-    canvas.drawCircle(center, radius * 0.82, ring);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius * 0.96),
-      -math.pi * 0.68,
-      math.pi * 0.62,
-      false,
-      ring..strokeWidth = 5,
-    );
-
-    final dotPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Colors.white.withValues(alpha: 0.48);
-    for (var row = 0; row < 4; row++) {
-      for (var col = 0; col < 3; col++) {
-        canvas.drawCircle(
-          Offset(center.dx - radius * 0.22 + col * radius * 0.22, center.dy - radius * 0.28 + row * radius * 0.18),
-          radius * 0.035,
-          dotPaint,
-        );
-      }
-    }
+    canvas.drawCircle(center, radius - 5, glow);
+    canvas.drawCircle(center, radius - 5, ring);
+    canvas.drawCircle(center, radius * 0.36, axis);
+    canvas.drawLine(Offset(center.dx, 8), Offset(center.dx, size.height - 8), axis);
+    canvas.drawLine(Offset(8, center.dy), Offset(size.width - 8, center.dy), axis);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _JoystickPainter oldDelegate) {
+    return oldDelegate.active != active || oldDelegate.opacity != opacity;
+  }
 }
 
 class _ActionDock extends StatelessWidget {
@@ -929,11 +730,13 @@ class _ActionDock extends StatelessWidget {
     required this.buttonSize,
     required this.onStop,
     required this.onLight,
+    required this.opacity,
   });
 
   final double buttonSize;
   final Future<void> Function() onStop;
   final Future<void> Function() onLight;
+  final double opacity;
 
   @override
   Widget build(BuildContext context) {
@@ -952,6 +755,7 @@ class _ActionDock extends StatelessWidget {
           iconSize: buttonSize * 0.48,
           circular: true,
           showLabel: false,
+          opacity: opacity,
         ),
         const SizedBox(width: 14),
         ControlButton(
@@ -965,6 +769,7 @@ class _ActionDock extends StatelessWidget {
           iconSize: buttonSize * 0.46,
           circular: true,
           showLabel: false,
+          opacity: opacity,
         ),
       ],
     );

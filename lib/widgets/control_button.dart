@@ -18,6 +18,7 @@ class ControlButton extends StatefulWidget {
     this.labelSize,
     this.circular = false,
     this.showLabel = true,
+    this.opacity = 0.78,
   });
 
   final IconData icon;
@@ -33,6 +34,7 @@ class ControlButton extends StatefulWidget {
   final double? labelSize;
   final bool circular;
   final bool showLabel;
+  final double opacity;
 
   @override
   State<ControlButton> createState() => _ControlButtonState();
@@ -46,17 +48,18 @@ class _ControlButtonState extends State<ControlButton> {
     setState(() => _pressed = value);
   }
 
+  double get _opacity => widget.opacity.clamp(0.0, 1.0).toDouble();
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.danger
-        ? const Color(0xC08C1D2D)
+        ? const Color(0xFF8C1D2D).withValues(alpha: 0.18 + (0.58 * _opacity))
         : _pressed
-            ? widget.accent.withValues(alpha: 0.22)
-            : const Color(0x7A0C1522);
+            ? widget.accent.withValues(alpha: 0.10 + (0.22 * _opacity))
+            : const Color(0xFF0C1522).withValues(alpha: 0.12 + (0.58 * _opacity));
     final border = _pressed
-        ? widget.accent.withValues(alpha: 0.95)
-        : widget.accent.withValues(alpha: 0.35);
-
+        ? widget.accent.withValues(alpha: 0.44 + (0.52 * _opacity))
+        : widget.accent.withValues(alpha: 0.18 + (0.32 * _opacity));
     final radius = BorderRadius.circular(widget.circular ? 999 : 24);
 
     return Listener(
@@ -92,7 +95,7 @@ class _ControlButtonState extends State<ControlButton> {
                   ? RadialGradient(
                       colors: [
                         widget.danger
-                            ? const Color(0xAAE22C45)
+                            ? const Color(0xFFE22C45).withValues(alpha: 0.20 + (0.28 * _opacity))
                             : widget.accent.withValues(alpha: _pressed ? 0.32 : 0.18),
                         bg,
                         const Color(0x33000000),
@@ -102,7 +105,7 @@ class _ControlButtonState extends State<ControlButton> {
                   : null,
               boxShadow: [
                 BoxShadow(
-                  color: widget.accent.withValues(alpha: _pressed ? 0.24 : 0.10),
+                  color: widget.accent.withValues(alpha: (_pressed ? 0.24 : 0.10) * _opacity),
                   blurRadius: _pressed ? 24 : 16,
                   spreadRadius: 0.5,
                 ),
@@ -113,6 +116,7 @@ class _ControlButtonState extends State<ControlButton> {
                   ? _ControlButtonRingPainter(
                       color: widget.danger ? const Color(0xFFFF5267) : widget.accent,
                       pressed: _pressed,
+                      opacity: _opacity,
                     )
                   : null,
               child: Column(
@@ -124,7 +128,8 @@ class _ControlButtonState extends State<ControlButton> {
                     color: Colors.white,
                     shadows: [
                       Shadow(
-                        color: (widget.danger ? const Color(0xFFFF5267) : widget.accent).withValues(alpha: 0.65),
+                        color: (widget.danger ? const Color(0xFFFF5267) : widget.accent)
+                            .withValues(alpha: 0.30 + (0.40 * _opacity)),
                         blurRadius: 10,
                       ),
                     ],
@@ -155,10 +160,12 @@ class _ControlButtonRingPainter extends CustomPainter {
   const _ControlButtonRingPainter({
     required this.color,
     required this.pressed,
+    required this.opacity,
   });
 
   final Color color;
   final bool pressed;
+  final double opacity;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -167,17 +174,17 @@ class _ControlButtonRingPainter extends CustomPainter {
     final glow = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = pressed ? 7 : 5
-      ..color = color.withValues(alpha: pressed ? 0.34 : 0.22)
+      ..color = color.withValues(alpha: (pressed ? 0.34 : 0.22) * opacity)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     final ring = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4
-      ..color = color.withValues(alpha: pressed ? 0.90 : 0.62);
+      ..color = color.withValues(alpha: (pressed ? 0.90 : 0.62) * opacity);
     final highlight = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round
-      ..color = color.withValues(alpha: pressed ? 0.88 : 0.58);
+      ..color = color.withValues(alpha: (pressed ? 0.88 : 0.58) * opacity);
 
     canvas.drawCircle(center, radius - 5, glow);
     canvas.drawCircle(center, radius - 5, ring);
@@ -192,6 +199,8 @@ class _ControlButtonRingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ControlButtonRingPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.pressed != pressed;
+    return oldDelegate.color != color ||
+        oldDelegate.pressed != pressed ||
+        oldDelegate.opacity != opacity;
   }
 }

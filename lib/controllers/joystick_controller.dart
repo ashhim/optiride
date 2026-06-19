@@ -22,8 +22,8 @@ class JoystickController extends ChangeNotifier {
 
   void updateNormalized(Offset normalized) {
     _normalized = Offset(
-      normalized.dx.clamp(-1.0, 1.0),
-      normalized.dy.clamp(-1.0, 1.0),
+      normalized.dx.clamp(-1.0, 1.0).toDouble(),
+      normalized.dy.clamp(-1.0, 1.0).toDouble(),
     );
     notifyListeners();
 

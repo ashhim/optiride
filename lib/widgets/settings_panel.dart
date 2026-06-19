@@ -14,6 +14,16 @@ class SettingsPanel extends StatelessWidget {
     required this.gyroDeadZone,
     required this.onDeadZoneChanged,
     required this.onCalibrateGyro,
+    required this.singleJoystickMode,
+    required this.onSingleJoystickModeChanged,
+    required this.buttonScale,
+    required this.onButtonScaleChanged,
+    required this.buttonOpacity,
+    required this.onButtonOpacityChanged,
+    required this.edgeInset,
+    required this.onEdgeInsetChanged,
+    required this.bottomOffset,
+    required this.onBottomOffsetChanged,
   });
 
   final TextEditingController ipController;
@@ -27,6 +37,16 @@ class SettingsPanel extends StatelessWidget {
   final double gyroDeadZone;
   final ValueChanged<double> onDeadZoneChanged;
   final VoidCallback onCalibrateGyro;
+  final bool singleJoystickMode;
+  final ValueChanged<bool> onSingleJoystickModeChanged;
+  final double buttonScale;
+  final ValueChanged<double> onButtonScaleChanged;
+  final double buttonOpacity;
+  final ValueChanged<double> onButtonOpacityChanged;
+  final double edgeInset;
+  final ValueChanged<double> onEdgeInsetChanged;
+  final double bottomOffset;
+  final ValueChanged<double> onBottomOffsetChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +112,14 @@ class SettingsPanel extends StatelessWidget {
                 value: gyroEnabled,
                 onChanged: onGyroChanged,
                 title: const Text('Gyro control'),
-                subtitle: const Text('Tilt to drive and steer'),
+                subtitle: const Text('Tilt only steers. Forward and reverse stay on the buttons.'),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: singleJoystickMode,
+                onChanged: onSingleJoystickModeChanged,
+                title: const Text('Single joystick mode'),
+                subtitle: const Text('One stick controls drive and steering'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -125,6 +152,58 @@ class SettingsPanel extends StatelessWidget {
                 min: 0.05,
                 max: 0.35,
                 onChanged: onDeadZoneChanged,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Expanded(child: Text('Button scale')),
+                  Text(buttonScale.toStringAsFixed(2)),
+                ],
+              ),
+              Slider(
+                value: buttonScale,
+                min: 0.75,
+                max: 1.35,
+                onChanged: onButtonScaleChanged,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Expanded(child: Text('Button transparency')),
+                  Text(buttonOpacity.toStringAsFixed(2)),
+                ],
+              ),
+              Slider(
+                value: buttonOpacity,
+                min: 0.35,
+                max: 1.0,
+                onChanged: onButtonOpacityChanged,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Expanded(child: Text('Side position')),
+                  Text(edgeInset.toStringAsFixed(0)),
+                ],
+              ),
+              Slider(
+                value: edgeInset,
+                min: 0,
+                max: 48,
+                onChanged: onEdgeInsetChanged,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Expanded(child: Text('Vertical position')),
+                  Text(bottomOffset.toStringAsFixed(0)),
+                ],
+              ),
+              Slider(
+                value: bottomOffset,
+                min: -36,
+                max: 86,
+                onChanged: onBottomOffsetChanged,
               ),
             ],
           ),
