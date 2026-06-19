@@ -55,11 +55,15 @@ class SettingsPanel extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xF0121725),
+          color: const Color(0xEE09111D),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: const Color(0x2236E6C5)),
           boxShadow: const [
-            BoxShadow(color: Color(0x80000000), blurRadius: 28, offset: Offset(0, -8)),
+            BoxShadow(
+              color: Color(0x80000000),
+              blurRadius: 28,
+              offset: Offset(0, -8),
+            ),
           ],
         ),
         child: SingleChildScrollView(
@@ -79,14 +83,23 @@ class SettingsPanel extends StatelessWidget {
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: connected ? const Color(0x223DFFB6) : const Color(0x22FF5267),
+                      color:
+                          connected
+                              ? const Color(0x223DFFB6)
+                              : const Color(0x22FF5267),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       statusText.toUpperCase(),
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -112,14 +125,7 @@ class SettingsPanel extends StatelessWidget {
                 value: gyroEnabled,
                 onChanged: onGyroChanged,
                 title: const Text('Gyro control'),
-                subtitle: const Text('Tilt only steers. Forward and reverse stay on the buttons.'),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: singleJoystickMode,
-                onChanged: onSingleJoystickModeChanged,
-                title: const Text('Single joystick mode'),
-                subtitle: const Text('One stick controls drive and steering'),
+                subtitle: const Text('Steering only'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -127,7 +133,15 @@ class SettingsPanel extends StatelessWidget {
                 icon: const Icon(Icons.center_focus_strong),
                 label: const Text('CALIBRATE GYRO'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: singleJoystickMode,
+                onChanged: onSingleJoystickModeChanged,
+                title: const Text('Single joystick mode'),
+                subtitle: const Text('Hide separate directional buttons'),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   const Expanded(child: Text('Sensitivity')),
@@ -153,7 +167,7 @@ class SettingsPanel extends StatelessWidget {
                 max: 0.35,
                 onChanged: onDeadZoneChanged,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   const Expanded(child: Text('Button scale')),
@@ -182,7 +196,7 @@ class SettingsPanel extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Expanded(child: Text('Side position')),
+                  const Expanded(child: Text('Edge inset')),
                   Text(edgeInset.toStringAsFixed(0)),
                 ],
               ),
@@ -195,7 +209,7 @@ class SettingsPanel extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Expanded(child: Text('Vertical position')),
+                  const Expanded(child: Text('Vertical offset')),
                   Text(bottomOffset.toStringAsFixed(0)),
                 ],
               ),

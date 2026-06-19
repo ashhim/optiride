@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -10,7 +9,6 @@ class JoystickController extends ChangeNotifier {
   Offset _normalized = Offset.zero;
   DriveDirection _drive = DriveDirection.neutral;
   SteerDirection _steer = SteerDirection.neutral;
-  Timer? _debounce;
 
   Offset get normalized => _normalized;
   DriveDirection get drive => _drive;
@@ -20,55 +18,61 @@ class JoystickController extends ChangeNotifier {
     _motion = motion;
   }
 
-  void updateNormalized(Offset normalized) {
-    _normalized = Offset(
+  Future<void> updateNormalized(Offset normalized) async {
+    final next = Offset(
       normalized.dx.clamp(-1.0, 1.0).toDouble(),
       normalized.dy.clamp(-1.0, 1.0).toDouble(),
     );
+
+    if (next == _normalized) return;
+
+    _normalized = next;
     notifyListeners();
 
     final nextDrive = _driveFromY(_normalized.dy);
     final nextSteer = _steerFromX(_normalized.dx);
 
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 120), () {
-      if (nextDrive != _drive) {
-        _drive = nextDrive;
-        _motion?.setDrive(nextDrive);
+    if (nextDrive != _drive) {
+      _drive = nextDrive;
+      final motion = _motion;
+      if (motion != null) {
+        await motion.setDrive(nextDrive);
       }
-      if (nextSteer != _steer) {
-        _steer = nextSteer;
-        _motion?.setSteer(nextSteer);
+    }
+
+    if (nextSteer != _steer) {
+      _steer = nextSteer;
+      final motion = _motion;
+      if (motion != null) {
+        await motion.setSteer(nextSteer);
       }
-      notifyListeners();
-    });
+    }
+
+    notifyListeners();
   }
 
   Future<void> release() async {
-    _debounce?.cancel();
     _normalized = Offset.zero;
     _drive = DriveDirection.neutral;
     _steer = SteerDirection.neutral;
     notifyListeners();
-    await _motion?.stopDrive();
-    await _motion?.stopSteer();
+
+    final motion = _motion;
+    if (motion != null) {
+      await motion.stopDrive();
+      await motion.stopSteer();
+    }
   }
 
   DriveDirection _driveFromY(double y) {
-    const threshold = 0.20;
+    const threshold = 0.18;
     if (y.abs() < threshold) return DriveDirection.neutral;
     return y > 0 ? DriveDirection.forward : DriveDirection.backward;
   }
 
   SteerDirection _steerFromX(double x) {
-    const threshold = 0.20;
+    const threshold = 0.18;
     if (x.abs() < threshold) return SteerDirection.neutral;
     return x < 0 ? SteerDirection.left : SteerDirection.right;
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    super.dispose();
   }
 }

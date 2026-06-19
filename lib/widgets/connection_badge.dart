@@ -6,11 +6,13 @@ class ConnectionBadge extends StatelessWidget {
     required this.connected,
     required this.checking,
     required this.statusText,
+    this.compact = false,
   });
 
   final bool connected;
   final bool checking;
   final String statusText;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +21,24 @@ class ConnectionBadge extends StatelessWidget {
         : checking
             ? const Color(0xFFFFD24A)
             : const Color(0xFFFF5267);
+
+    if (compact) {
+      return Container(
+        width: 16,
+        height: 16,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.80),
+              blurRadius: 14,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      );
+    }
 
     final label = checking ? 'checking' : statusText;
 

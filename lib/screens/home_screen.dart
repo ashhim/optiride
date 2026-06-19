@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:ui';
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,8 +12,9 @@ import '../controllers/light_controller.dart';
 import '../controllers/motion_controller.dart';
 import '../services/stream_service.dart';
 import '../widgets/camera_view.dart';
-import '../widgets/connection_badge.dart';
 import '../widgets/control_button.dart';
+import '../widgets/joystick_widget.dart';
+import '../widgets/connection_badge.dart';
 import '../widgets/settings_icon_button.dart';
 import '../widgets/settings_panel.dart';
 
@@ -159,35 +159,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Consumer2<GyroController, HudSettingsController>(
-        builder: (context, gyro, hudSettings, _) => SettingsPanel(
-          ipController: _ipController,
-          connected: _connection.connected,
-          statusText: _connection.statusText,
-          onConnect: _connect,
-          gyroEnabled: gyro.enabled,
-          onGyroChanged: (value) {
-            unawaited(_setGyroEnabled(value));
-          },
-          gyroSensitivity: gyro.sensitivity,
-          onSensitivityChanged: gyro.setSensitivity,
-          gyroDeadZone: gyro.deadZone,
-          onDeadZoneChanged: gyro.setDeadZone,
-          onCalibrateGyro: gyro.calibrate,
-          singleJoystickMode: hudSettings.singleJoystickMode,
-          onSingleJoystickModeChanged: (value) {
-            unawaited(_setSingleJoystickMode(value));
-          },
-          buttonScale: hudSettings.buttonScale,
-          onButtonScaleChanged: hudSettings.setButtonScale,
-          buttonOpacity: hudSettings.buttonOpacity,
-          onButtonOpacityChanged: hudSettings.setButtonOpacity,
-          edgeInset: hudSettings.edgeInset,
-          onEdgeInsetChanged: hudSettings.setEdgeInset,
-          bottomOffset: hudSettings.bottomOffset,
-          onBottomOffsetChanged: hudSettings.setBottomOffset,
-        ),
-      ),
+      builder:
+          (context) => Consumer2<GyroController, HudSettingsController>(
+            builder:
+                (context, gyro, hudSettings, _) => SettingsPanel(
+                  ipController: _ipController,
+                  connected: _connection.connected,
+                  statusText: _connection.statusText,
+                  onConnect: _connect,
+                  gyroEnabled: gyro.enabled,
+                  onGyroChanged: (value) {
+                    unawaited(_setGyroEnabled(value));
+                  },
+                  gyroSensitivity: gyro.sensitivity,
+                  onSensitivityChanged: gyro.setSensitivity,
+                  gyroDeadZone: gyro.deadZone,
+                  onDeadZoneChanged: gyro.setDeadZone,
+                  onCalibrateGyro: gyro.calibrate,
+                  singleJoystickMode: hudSettings.singleJoystickMode,
+                  onSingleJoystickModeChanged: (value) {
+                    unawaited(_setSingleJoystickMode(value));
+                  },
+                  buttonScale: hudSettings.buttonScale,
+                  onButtonScaleChanged: hudSettings.setButtonScale,
+                  buttonOpacity: hudSettings.buttonOpacity,
+                  onButtonOpacityChanged: hudSettings.setButtonOpacity,
+                  edgeInset: hudSettings.edgeInset,
+                  onEdgeInsetChanged: hudSettings.setEdgeInset,
+                  bottomOffset: hudSettings.bottomOffset,
+                  onBottomOffsetChanged: hudSettings.setBottomOffset,
+                ),
+          ),
     );
   }
 
@@ -205,16 +207,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _applyMotionState() async {
-    final forward = _keysDown.contains(LogicalKeyboardKey.arrowUp) ||
+    final forward =
+        _keysDown.contains(LogicalKeyboardKey.arrowUp) ||
         _keysDown.contains(LogicalKeyboardKey.keyW) ||
         _driveForwardHeld;
-    final backward = _keysDown.contains(LogicalKeyboardKey.arrowDown) ||
+    final backward =
+        _keysDown.contains(LogicalKeyboardKey.arrowDown) ||
         _keysDown.contains(LogicalKeyboardKey.keyS) ||
         _driveBackwardHeld;
-    final left = _keysDown.contains(LogicalKeyboardKey.arrowLeft) ||
+    final left =
+        _keysDown.contains(LogicalKeyboardKey.arrowLeft) ||
         _keysDown.contains(LogicalKeyboardKey.keyA) ||
         _steerLeftHeld;
-    final right = _keysDown.contains(LogicalKeyboardKey.arrowRight) ||
+    final right =
+        _keysDown.contains(LogicalKeyboardKey.arrowRight) ||
         _keysDown.contains(LogicalKeyboardKey.keyD) ||
         _steerRightHeld;
 
@@ -323,23 +329,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context, constraints) {
         final portrait = constraints.maxHeight >= constraints.maxWidth;
         _gyro.setOrientationLandscape(!portrait);
-        final shortest = constraints.maxWidth < constraints.maxHeight
-            ? constraints.maxWidth
-            : constraints.maxHeight;
-        final controlSize = (portrait
-            ? (shortest * 0.18).clamp(60.0, 74.0).toDouble()
-            : (shortest * 0.13).clamp(54.0, 66.0).toDouble()) *
+
+        final shortest =
+            constraints.maxWidth < constraints.maxHeight
+                ? constraints.maxWidth
+                : constraints.maxHeight;
+
+        final controlSize =
+            (portrait
+                ? (shortest * 0.18).clamp(60.0, 74.0).toDouble()
+                : (shortest * 0.13).clamp(54.0, 66.0).toDouble()) *
             hudSettings.buttonScale;
-        final actionSize = (portrait
-            ? (shortest * 0.16).clamp(56.0, 66.0).toDouble()
-            : (shortest * 0.11).clamp(50.0, 60.0).toDouble()) *
+        final actionSize =
+            (portrait
+                ? (shortest * 0.16).clamp(56.0, 66.0).toDouble()
+                : (shortest * 0.11).clamp(50.0, 60.0).toDouble()) *
             hudSettings.buttonScale;
-        final horizontalInset = (portrait ? 16.0 : 28.0) + hudSettings.edgeInset;
-        final controlBottom = ((portrait ? 94.0 : 22.0) + hudSettings.bottomOffset)
-            .clamp(12.0, constraints.maxHeight * 0.46)
-            .toDouble();
+        final horizontalInset =
+            (portrait ? 16.0 : 28.0) + hudSettings.edgeInset;
+        final maxControlBottom = math.max(12.0, constraints.maxHeight * 0.46);
+        final controlBottom =
+            ((portrait ? 24.0 : 12.0) + hudSettings.bottomOffset)
+                .clamp(12.0, maxControlBottom)
+                .toDouble();
         final controlSpacing = portrait ? 12.0 : 18.0;
-        final joystickSize = (portrait
+        final joystickSize =
+            (portrait
                 ? (shortest * 0.34).clamp(118.0, 156.0).toDouble()
                 : (shortest * 0.26).clamp(116.0, 144.0).toDouble()) *
             hudSettings.buttonScale;
@@ -350,18 +365,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             focusNode: _focusNode,
             onKeyEvent: _handleKeyEvent,
             child: Stack(
+              fit: StackFit.expand,
               children: [
                 const Positioned.fill(child: _AppBackground()),
-                const Positioned.fill(child: _FullScreenCamera()),
+                const Positioned.fill(child: CameraView()),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withValues(alpha: 0.12),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.14),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                     child: Row(
                       children: [
-                        _HudHeader(
+                        ConnectionBadge(
                           connected: _connection.connected,
                           checking: _connection.checking,
                           statusText: _connection.statusText,
+                          compact: true,
                         ),
                         const Spacer(),
                         SettingsIconButton(
@@ -372,34 +407,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0x0F000000),
-                            Colors.transparent,
-                            Color(0x24000000),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
                 if (hudSettings.singleJoystickMode)
                   Positioned(
                     left: horizontalInset,
                     bottom: controlBottom,
-                    child: Consumer<JoystickController>(
-                      builder: (context, joystick, _) => _JoystickPad(
-                        size: joystickSize,
-                        joystick: joystick,
-                        opacity: hudSettings.buttonOpacity,
-                      ),
+                    child: JoystickWidget(
+                      size: joystickSize,
+                      opacity: hudSettings.buttonOpacity,
+                      onChanged: (offset) {
+                        _joystick.updateNormalized(offset);
+                      },
+                      onReleased: () {
+                        unawaited(_joystick.release());
+                      },
                     ),
                   )
                 else ...[
@@ -471,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: portrait ? 18 : 18,
+                  bottom: 4,
                   child: SafeArea(
                     top: false,
                     child: Center(
@@ -524,204 +544,9 @@ class _AppBackground extends StatelessWidget {
               child: const SizedBox.expand(),
             ),
           ),
-          IgnorePointer(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0x121DE9B6)),
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    const Color(0xFF1DE9B6).withValues(alpha: 0.02),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
-  }
-}
-
-class _HudHeader extends StatelessWidget {
-  const _HudHeader({
-    required this.connected,
-    required this.checking,
-    required this.statusText,
-  });
-
-  final bool connected;
-  final bool checking;
-  final String statusText;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: const Color(0x5609111D),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0x1836E6C5)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'OPTIRIDE',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Controller',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 9,
-                      letterSpacing: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              ConnectionBadge(
-                connected: connected,
-                checking: checking,
-                statusText: statusText,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _JoystickPad extends StatelessWidget {
-  const _JoystickPad({
-    required this.size,
-    required this.joystick,
-    required this.opacity,
-  });
-
-  final double size;
-  final JoystickController joystick;
-  final double opacity;
-
-  void _updateFromLocal(Offset localPosition) {
-    final radius = size / 2;
-    final center = Offset(radius, radius);
-    final raw = localPosition - center;
-    final limited = raw.distance > radius ? Offset.fromDirection(raw.direction, radius) : raw;
-    joystick.updateNormalized(Offset(limited.dx / radius, -limited.dy / radius));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = size / 2;
-    final knobSize = size * 0.34;
-    final knobOffset = Offset(
-      radius + joystick.normalized.dx * radius * 0.64 - knobSize / 2,
-      radius - joystick.normalized.dy * radius * 0.64 - knobSize / 2,
-    );
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (details) => _updateFromLocal(details.localPosition),
-      onPanUpdate: (details) => _updateFromLocal(details.localPosition),
-      onPanEnd: (_) => unawaited(joystick.release()),
-      onPanCancel: () => unawaited(joystick.release()),
-      child: SizedBox.square(
-        dimension: size,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _JoystickPainter(
-                  active: joystick.normalized.distance > 0.05,
-                  opacity: opacity,
-                ),
-              ),
-            ),
-            Positioned(
-              left: knobOffset.dx,
-              top: knobOffset.dy,
-              child: Container(
-                width: knobSize,
-                height: knobSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFF9EFFF2).withValues(alpha: 0.55),
-                      const Color(0xFF1DE9B6).withValues(alpha: 0.18),
-                      Colors.black.withValues(alpha: 0.18),
-                    ],
-                  ),
-                  border: Border.all(color: const Color(0xCC6DFFF0), width: 1.4),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0xAA1DE9B6), blurRadius: 22),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _JoystickPainter extends CustomPainter {
-  const _JoystickPainter({
-    required this.active,
-    required this.opacity,
-  });
-
-  final bool active;
-  final double opacity;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.shortestSide / 2;
-    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
-    final glow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = active ? 9 : 6
-      ..color = const Color(0x6637F5DF).withValues(alpha: 0.16 + (0.28 * normalizedOpacity))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = const Color(0xAA37F5DF).withValues(alpha: 0.28 + (0.52 * normalizedOpacity));
-    final axis = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.10 + (0.18 * normalizedOpacity));
-
-    canvas.drawCircle(center, radius - 5, glow);
-    canvas.drawCircle(center, radius - 5, ring);
-    canvas.drawCircle(center, radius * 0.36, axis);
-    canvas.drawLine(Offset(center.dx, 8), Offset(center.dx, size.height - 8), axis);
-    canvas.drawLine(Offset(8, center.dy), Offset(size.width - 8, center.dy), axis);
-  }
-
-  @override
-  bool shouldRepaint(covariant _JoystickPainter oldDelegate) {
-    return oldDelegate.active != active || oldDelegate.opacity != opacity;
   }
 }
 
@@ -747,7 +572,7 @@ class _ActionDock extends StatelessWidget {
           icon: Icons.power_settings_new,
           label: 'STOP',
           onDown: onStop,
-          onUp: () {},
+          onUp: () async {},
           danger: true,
           compact: true,
           width: buttonSize,
@@ -762,7 +587,7 @@ class _ActionDock extends StatelessWidget {
           icon: Icons.lightbulb_outline,
           label: 'LIGHT',
           onDown: onLight,
-          onUp: () {},
+          onUp: () async {},
           compact: true,
           width: buttonSize,
           height: buttonSize,
@@ -794,50 +619,13 @@ class _RaceControlPair extends StatelessWidget {
     if (vertical) {
       return Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          first,
-          SizedBox(height: spacing),
-          second,
-        ],
+        children: [first, SizedBox(height: spacing), second],
       );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        first,
-        SizedBox(width: spacing),
-        second,
-      ],
-    );
-  }
-}
-
-class _FullScreenCamera extends StatelessWidget {
-  const _FullScreenCamera();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const CameraView(),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withValues(alpha: 0.22),
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.18),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-      ),
+      children: [first, SizedBox(width: spacing), second],
     );
   }
 }
