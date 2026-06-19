@@ -17,6 +17,7 @@ class GyroController extends ChangeNotifier {
   DriveDirection _drive = DriveDirection.neutral;
   SteerDirection _steer = SteerDirection.neutral;
   Timer? _debounce;
+  int _toggleRevision = 0;
 
   bool get enabled => _enabled;
   double get sensitivity => _sensitivity;
@@ -47,6 +48,7 @@ class GyroController extends ChangeNotifier {
 
   Future<void> setEnabled(bool enabled) async {
     if (_enabled == enabled) return;
+    final revision = ++_toggleRevision;
     _enabled = enabled;
     _baseline = null;
     _debounce?.cancel();
@@ -60,6 +62,7 @@ class GyroController extends ChangeNotifier {
     if (enabled) {
       await _motion?.stopAll();
       await _subscription?.cancel();
+      if (revision != _toggleRevision || !_enabled) return;
       _subscription = null;
       _subscription = accelerometerEventStream().listen(_handleAccelerometer);
       return;
@@ -68,6 +71,7 @@ class GyroController extends ChangeNotifier {
     final subscription = _subscription;
     _subscription = null;
     await subscription?.cancel();
+    if (revision != _toggleRevision || _enabled) return;
     await _motion?.stopAll();
   }
 

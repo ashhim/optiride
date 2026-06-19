@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 class ControlButton extends StatefulWidget {
@@ -14,6 +16,8 @@ class ControlButton extends StatefulWidget {
     this.height,
     this.iconSize,
     this.labelSize,
+    this.circular = false,
+    this.showLabel = true,
   });
 
   final IconData icon;
@@ -27,6 +31,8 @@ class ControlButton extends StatefulWidget {
   final double? height;
   final double? iconSize;
   final double? labelSize;
+  final bool circular;
+  final bool showLabel;
 
   @override
   State<ControlButton> createState() => _ControlButtonState();
@@ -43,13 +49,15 @@ class _ControlButtonState extends State<ControlButton> {
   @override
   Widget build(BuildContext context) {
     final bg = widget.danger
-        ? const Color(0xFF8C1D2D)
+        ? const Color(0xC08C1D2D)
         : _pressed
             ? widget.accent.withValues(alpha: 0.22)
-            : const Color(0xFF0C1522);
+            : const Color(0x7A0C1522);
     final border = _pressed
         ? widget.accent.withValues(alpha: 0.95)
         : widget.accent.withValues(alpha: 0.35);
+
+    final radius = BorderRadius.circular(widget.circular ? 999 : 24);
 
     return Listener(
       behavior: HitTestBehavior.opaque,
@@ -65,40 +73,125 @@ class _ControlButtonState extends State<ControlButton> {
         _setPressed(false);
         widget.onUp();
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
-        width: widget.width ?? (widget.compact ? 72 : 100),
-        height: widget.height ?? (widget.compact ? 72 : 100),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: border, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: widget.accent.withValues(alpha: _pressed ? 0.24 : 0.10),
-              blurRadius: _pressed ? 24 : 16,
-              spreadRadius: 0.5,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOut,
+            width: widget.width ?? (widget.compact ? 72 : 100),
+            height: widget.height ?? (widget.compact ? 72 : 100),
+            transformAlignment: Alignment.center,
+            transform: Matrix4.identity()..scale(_pressed ? 0.94 : 1.0),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: radius,
+              border: Border.all(color: border, width: 1.2),
+              gradient: widget.circular
+                  ? RadialGradient(
+                      colors: [
+                        widget.danger
+                            ? const Color(0xAAE22C45)
+                            : widget.accent.withValues(alpha: _pressed ? 0.32 : 0.18),
+                        bg,
+                        const Color(0x33000000),
+                      ],
+                      stops: const [0.0, 0.62, 1.0],
+                    )
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.accent.withValues(alpha: _pressed ? 0.24 : 0.10),
+                  blurRadius: _pressed ? 24 : 16,
+                  spreadRadius: 0.5,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(widget.icon, size: widget.iconSize ?? (widget.compact ? 28 : 36), color: Colors.white),
-            SizedBox(height: widget.compact ? 4 : 6),
-            Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: widget.labelSize ?? (widget.compact ? 10 : 12),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.0,
-                color: Colors.white70,
+            child: CustomPaint(
+              foregroundPainter: widget.circular
+                  ? _ControlButtonRingPainter(
+                      color: widget.danger ? const Color(0xFFFF5267) : widget.accent,
+                      pressed: _pressed,
+                    )
+                  : null,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    size: widget.iconSize ?? (widget.compact ? 28 : 36),
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: (widget.danger ? const Color(0xFFFF5267) : widget.accent).withValues(alpha: 0.65),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                  if (widget.showLabel) ...[
+                    SizedBox(height: widget.compact ? 4 : 6),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        fontSize: widget.labelSize ?? (widget.compact ? 10 : 12),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+}
+
+class _ControlButtonRingPainter extends CustomPainter {
+  const _ControlButtonRingPainter({
+    required this.color,
+    required this.pressed,
+  });
+
+  final Color color;
+  final bool pressed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = pressed ? 7 : 5
+      ..color = color.withValues(alpha: pressed ? 0.34 : 0.22)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..color = color.withValues(alpha: pressed ? 0.90 : 0.62);
+    final highlight = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..color = color.withValues(alpha: pressed ? 0.88 : 0.58);
+
+    canvas.drawCircle(center, radius - 5, glow);
+    canvas.drawCircle(center, radius - 5, ring);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - 8),
+      -1.65,
+      1.12,
+      false,
+      highlight,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ControlButtonRingPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.pressed != pressed;
   }
 }

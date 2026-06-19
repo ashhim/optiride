@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -266,16 +268,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return LayoutBuilder(
       builder: (context, constraints) {
         final portrait = constraints.maxHeight >= constraints.maxWidth;
+        final screenWidth = constraints.maxWidth;
         final shortest = constraints.maxWidth < constraints.maxHeight
             ? constraints.maxWidth
             : constraints.maxHeight;
-        final railButtonSize = portrait
-            ? (shortest * 0.18).clamp(62.0, 78.0)
-            : (shortest * 0.14).clamp(60.0, 74.0);
-        final dockButtonSize = portrait
-            ? (shortest * 0.17).clamp(60.0, 74.0)
-            : (shortest * 0.12).clamp(58.0, 70.0);
-        final cameraAspect = portrait ? 4 / 3 : 16 / 9;
+        final controlSize = portrait
+            ? (shortest * 0.18).clamp(60.0, 74.0)
+            : (shortest * 0.13).clamp(54.0, 66.0);
+        final actionSize = portrait
+            ? (shortest * 0.16).clamp(56.0, 66.0)
+            : (shortest * 0.11).clamp(50.0, 60.0);
+        final horizontalInset = portrait ? 16.0 : 28.0;
+        final controlBottom = portrait ? 94.0 : 22.0;
+        final controlSpacing = portrait ? 12.0 : 18.0;
+        final speedGaugeSize = portrait
+            ? (shortest * 0.30).clamp(104.0, 132.0)
+            : (shortest * 0.34).clamp(118.0, 168.0);
+        final miniMapSize = portrait
+            ? (shortest * 0.15).clamp(48.0, 60.0)
+            : (shortest * 0.16).clamp(62.0, 82.0);
 
         return Scaffold(
           body: Focus(
@@ -285,57 +296,139 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Stack(
               children: [
                 const Positioned.fill(child: _AppBackground()),
+                const Positioned.fill(child: _FullScreenCamera()),
                 SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                     child: Row(
                       children: [
-                        Expanded(
-                          child: _HudHeader(
-                            connected: _connection.connected,
-                            checking: _connection.checking,
-                            statusText: _connection.statusText,
-                          ),
+                        _HudHeader(
+                          connected: _connection.connected,
+                          checking: _connection.checking,
+                          statusText: _connection.statusText,
                         ),
                         const Spacer(),
+                        if (!portrait || screenWidth > 560) const _RaceTimer(),
+                        if (!portrait || screenWidth > 560) const Spacer(),
+                        if (!portrait || screenWidth > 560) ...[
+                          _MiniMapHud(size: miniMapSize),
+                          const SizedBox(width: 10),
+                        ],
                         SettingsIconButton(onPressed: _openSettings),
                       ],
                     ),
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(14, 76, 14, portrait ? 12 : 16),
-                  child: portrait
-                      ? _PortraitHud(
-                          cameraAspect: cameraAspect,
-                          railButtonSize: railButtonSize,
-                          dockButtonSize: dockButtonSize,
-                          onDriveForwardDown: _pressDriveForward,
-                          onDriveForwardUp: _releaseDriveForward,
-                          onDriveBackwardDown: _pressDriveBackward,
-                          onDriveBackwardUp: _releaseDriveBackward,
-                          onSteerLeftDown: _pressSteerLeft,
-                          onSteerLeftUp: _releaseSteerLeft,
-                          onSteerRightDown: _pressSteerRight,
-                          onSteerRightUp: _releaseSteerRight,
-                          onStop: _stopAll,
-                          onLight: _toggleLight,
-                        )
-                      : _LandscapeHud(
-                          cameraAspect: cameraAspect,
-                          railButtonSize: railButtonSize,
-                          dockButtonSize: dockButtonSize,
-                          onDriveForwardDown: _pressDriveForward,
-                          onDriveForwardUp: _releaseDriveForward,
-                          onDriveBackwardDown: _pressDriveBackward,
-                          onDriveBackwardUp: _releaseDriveBackward,
-                          onSteerLeftDown: _pressSteerLeft,
-                          onSteerLeftUp: _releaseSteerLeft,
-                          onSteerRightDown: _pressSteerRight,
-                          onSteerRightUp: _releaseSteerRight,
-                          onStop: _stopAll,
-                          onLight: _toggleLight,
+                if (portrait && screenWidth > 520)
+                  const Positioned(
+                    top: 18,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(child: Center(child: _RaceTimer())),
+                  ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0x0F000000),
+                            Colors.transparent,
+                            Color(0x24000000),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: portrait ? 18 : 28,
+                  top: portrait ? 112 : 96,
+                  child: _SpeedGauge(size: speedGaugeSize),
+                ),
+                if (!portrait)
+                  Positioned(
+                    right: 32,
+                    bottom: 94,
+                    child: _PedalMeter(size: speedGaugeSize * 0.64),
+                  ),
+                Positioned(
+                  left: horizontalInset,
+                  bottom: controlBottom,
+                  child: _RaceControlPair(
+                    vertical: portrait,
+                    spacing: controlSpacing,
+                    first: ControlButton(
+                      icon: Icons.keyboard_arrow_up_rounded,
+                      label: 'UP',
+                      onDown: _pressDriveForward,
+                      onUp: _releaseDriveForward,
+                      width: controlSize,
+                      height: controlSize,
+                      iconSize: controlSize * 0.54,
+                      circular: true,
+                      showLabel: false,
+                    ),
+                    second: ControlButton(
+                      icon: Icons.keyboard_arrow_down_rounded,
+                      label: 'DOWN',
+                      onDown: _pressDriveBackward,
+                      onUp: _releaseDriveBackward,
+                      width: controlSize,
+                      height: controlSize,
+                      iconSize: controlSize * 0.54,
+                      circular: true,
+                      showLabel: false,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: horizontalInset,
+                  bottom: controlBottom,
+                  child: _RaceControlPair(
+                    vertical: portrait,
+                    spacing: controlSpacing,
+                    first: ControlButton(
+                      icon: Icons.keyboard_arrow_left_rounded,
+                      label: 'LEFT',
+                      onDown: _pressSteerLeft,
+                      onUp: _releaseSteerLeft,
+                      width: controlSize,
+                      height: controlSize,
+                      iconSize: controlSize * 0.54,
+                      circular: true,
+                      showLabel: false,
+                    ),
+                    second: ControlButton(
+                      icon: Icons.keyboard_arrow_right_rounded,
+                      label: 'RIGHT',
+                      onDown: _pressSteerRight,
+                      onUp: _releaseSteerRight,
+                      width: controlSize,
+                      height: controlSize,
+                      iconSize: controlSize * 0.54,
+                      circular: true,
+                      showLabel: false,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: portrait ? 18 : 18,
+                  child: SafeArea(
+                    top: false,
+                    child: Center(
+                      child: _ActionDock(
+                        buttonSize: actionSize,
+                        onStop: _stopAll,
+                        onLight: _toggleLight,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -412,324 +505,203 @@ class _HudHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xCC09111D),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x2236E6C5)),
-      ),
-      child: Row(
-        children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'OPTIRIDE',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2.0,
-                ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Controller',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 10,
-                  letterSpacing: 1.3,
-                ),
-              ),
-            ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0x7A09111D),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0x2236E6C5)),
           ),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: ConnectionBadge(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'OPTIRIDE',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Controller',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 9,
+                      letterSpacing: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              ConnectionBadge(
                 connected: connected,
                 checking: checking,
                 statusText: statusText,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PortraitHud extends StatelessWidget {
-  const _PortraitHud({
-    required this.cameraAspect,
-    required this.railButtonSize,
-    required this.dockButtonSize,
-    required this.onDriveForwardDown,
-    required this.onDriveForwardUp,
-    required this.onDriveBackwardDown,
-    required this.onDriveBackwardUp,
-    required this.onSteerLeftDown,
-    required this.onSteerLeftUp,
-    required this.onSteerRightDown,
-    required this.onSteerRightUp,
-    required this.onStop,
-    required this.onLight,
-  });
-
-  final double cameraAspect;
-  final double railButtonSize;
-  final double dockButtonSize;
-  final Future<void> Function() onDriveForwardDown;
-  final Future<void> Function() onDriveForwardUp;
-  final Future<void> Function() onDriveBackwardDown;
-  final Future<void> Function() onDriveBackwardUp;
-  final Future<void> Function() onSteerLeftDown;
-  final Future<void> Function() onSteerLeftUp;
-  final Future<void> Function() onSteerRightDown;
-  final Future<void> Function() onSteerRightUp;
-  final Future<void> Function() onStop;
-  final Future<void> Function() onLight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 820),
-                    child: AspectRatio(
-                      aspectRatio: cameraAspect,
-                      child: const _CameraViewport(),
-                    ),
-                  ),
-                ),
-              ),
-        const SizedBox(height: 12),
-        SafeArea(
-          top: false,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.bottomLeft,
-                  child: _ControlCluster(
-                    title: 'DRIVE',
-                    primary: ControlButton(
-                      icon: Icons.arrow_upward,
-                      label: 'UP',
-                      onDown: onDriveForwardDown,
-                      onUp: onDriveForwardUp,
-                      width: railButtonSize,
-                      height: railButtonSize,
-                      iconSize: railButtonSize * 0.42,
-                      labelSize: 10,
-                    ),
-                    secondary: ControlButton(
-                      icon: Icons.arrow_downward,
-                      label: 'DOWN',
-                      onDown: onDriveBackwardDown,
-                      onUp: onDriveBackwardUp,
-                      width: railButtonSize,
-                      height: railButtonSize,
-                      iconSize: railButtonSize * 0.42,
-                      labelSize: 10,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                fit: FlexFit.loose,
-                child: _ActionDock(
-                  buttonSize: dockButtonSize,
-                  onStop: onStop,
-                  onLight: onLight,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: _ControlCluster(
-                    title: 'STEER',
-                    primary: ControlButton(
-                      icon: Icons.arrow_back,
-                      label: 'LEFT',
-                      onDown: onSteerLeftDown,
-                      onUp: onSteerLeftUp,
-                      width: railButtonSize,
-                      height: railButtonSize,
-                      iconSize: railButtonSize * 0.42,
-                      labelSize: 10,
-                    ),
-                    secondary: ControlButton(
-                      icon: Icons.arrow_forward,
-                      label: 'RIGHT',
-                      onDown: onSteerRightDown,
-                      onUp: onSteerRightUp,
-                      width: railButtonSize,
-                      height: railButtonSize,
-                      iconSize: railButtonSize * 0.42,
-                      labelSize: 10,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _LandscapeHud extends StatelessWidget {
-  const _LandscapeHud({
-    required this.cameraAspect,
-    required this.railButtonSize,
-    required this.dockButtonSize,
-    required this.onDriveForwardDown,
-    required this.onDriveForwardUp,
-    required this.onDriveBackwardDown,
-    required this.onDriveBackwardUp,
-    required this.onSteerLeftDown,
-    required this.onSteerLeftUp,
-    required this.onSteerRightDown,
-    required this.onSteerRightUp,
-    required this.onStop,
-    required this.onLight,
+class _RaceTimer extends StatelessWidget {
+  const _RaceTimer();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0x2236E6C5)),
+          ),
+          child: const Text(
+            '00:00:00',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.0,
+              shadows: [
+                Shadow(color: Color(0xFF06110F), blurRadius: 4, offset: Offset(0, 2)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniMapHud extends StatelessWidget {
+  const _MiniMapHud({
+    required this.size,
   });
 
-  final double cameraAspect;
-  final double railButtonSize;
-  final double dockButtonSize;
-  final Future<void> Function() onDriveForwardDown;
-  final Future<void> Function() onDriveForwardUp;
-  final Future<void> Function() onDriveBackwardDown;
-  final Future<void> Function() onDriveBackwardUp;
-  final Future<void> Function() onSteerLeftDown;
-  final Future<void> Function() onSteerLeftUp;
-  final Future<void> Function() onSteerRightDown;
-  final Future<void> Function() onSteerRightUp;
-  final Future<void> Function() onStop;
-  final Future<void> Function() onLight;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.60,
-              maxHeight: MediaQuery.of(context).size.height * 0.78,
-            ),
-            child: AspectRatio(aspectRatio: cameraAspect, child: const _CameraViewport()),
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withValues(alpha: 0.15),
+            border: Border.all(color: const Color(0xAA37F5DF), width: 1.2),
+            boxShadow: const [
+              BoxShadow(color: Color(0x6637F5DF), blurRadius: 18),
+            ],
           ),
+          child: CustomPaint(painter: _MiniMapPainter()),
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: _ControlCluster(
-          title: 'DRIVE',
-          primary: ControlButton(
-              icon: Icons.arrow_upward,
-              label: 'UP',
-              onDown: onDriveForwardDown,
-              onUp: onDriveForwardUp,
-              width: railButtonSize,
-              height: railButtonSize,
-              iconSize: railButtonSize * 0.42,
-              labelSize: 10,
-            ),
-            secondary: ControlButton(
-              icon: Icons.arrow_downward,
-              label: 'DOWN',
-              onDown: onDriveBackwardDown,
-              onUp: onDriveBackwardUp,
-              width: railButtonSize,
-              height: railButtonSize,
-              iconSize: railButtonSize * 0.42,
-              labelSize: 10,
-            ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: _ControlCluster(
-          title: 'STEER',
-          primary: ControlButton(
-              icon: Icons.arrow_back,
-              label: 'LEFT',
-              onDown: onSteerLeftDown,
-              onUp: onSteerLeftUp,
-              width: railButtonSize,
-              height: railButtonSize,
-              iconSize: railButtonSize * 0.42,
-              labelSize: 10,
-            ),
-            secondary: ControlButton(
-              icon: Icons.arrow_forward,
-              label: 'RIGHT',
-              onDown: onSteerRightDown,
-              onUp: onSteerRightUp,
-              width: railButtonSize,
-              height: railButtonSize,
-              iconSize: railButtonSize * 0.42,
-              labelSize: 10,
-            ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: SafeArea(
-              top: false,
-              child: _ActionDock(
-                buttonSize: dockButtonSize,
-                onStop: onStop,
-                onLight: onLight,
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _CameraViewport extends StatelessWidget {
-  const _CameraViewport();
+class _SpeedGauge extends StatelessWidget {
+  const _SpeedGauge({
+    required this.size,
+  });
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0x5536E6C5), width: 1.15),
-        boxShadow: const [
-          BoxShadow(color: Color(0x66000000), blurRadius: 28, offset: Offset(0, 16)),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+    final dialSize = size * 0.58;
+    return IgnorePointer(
+      child: SizedBox(
+        width: size,
+        height: size * 1.28,
         child: Stack(
-          fit: StackFit.expand,
+          clipBehavior: Clip.none,
           children: [
-            const CameraView(),
-            IgnorePointer(
-              child: DecoratedBox(
+            Positioned.fill(child: CustomPaint(painter: _SpeedGaugePainter())),
+            Positioned(
+              left: size * 0.23,
+              top: size * 0.45,
+              child: Container(
+                width: dialSize,
+                height: dialSize,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      const Color(0xFF000000).withValues(alpha: 0.12),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                  shape: BoxShape.circle,
+                  color: const Color(0x55071D22),
+                  border: Border.all(color: const Color(0xAA37F5DF), width: 1.1),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x7737F5DF), blurRadius: 18),
+                  ],
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '207',
+                      style: TextStyle(
+                        color: Color(0xFF6DFFF0),
+                        fontSize: 25,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w800,
+                        height: 0.95,
+                      ),
+                    ),
+                    Text(
+                      'km/h',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              bottom: size * 0.03,
+              child: _TinyTelemetry(label: '0543', sublabel: 'HP'),
+            ),
+            Positioned(
+              left: size * 0.46,
+              bottom: 0,
+              child: Container(
+                width: size * 0.20,
+                height: size * 0.20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0x661B1308),
+                  border: Border.all(color: const Color(0xFFFF9440), width: 1.1),
+                  boxShadow: const [BoxShadow(color: Color(0x66FF9440), blurRadius: 12)],
+                ),
+                child: const Text(
+                  '3',
+                  style: TextStyle(
+                    color: Color(0xFFFFB15E),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -741,46 +713,215 @@ class _CameraViewport extends StatelessWidget {
   }
 }
 
-class _ControlCluster extends StatelessWidget {
-  const _ControlCluster({
-    required this.title,
-    required this.primary,
-    required this.secondary,
+class _TinyTelemetry extends StatelessWidget {
+  const _TinyTelemetry({
+    required this.label,
+    required this.sublabel,
   });
 
-  final String title;
-  final Widget primary;
-  final Widget secondary;
+  final String label;
+  final String sublabel;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0x90090F18),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x2236E6C5)),
+        shape: BoxShape.circle,
+        color: const Color(0x55071D22),
+        border: Border.all(color: const Color(0xAA37F5DF), width: 1),
+        boxShadow: const [BoxShadow(color: Color(0x5537F5DF), blurRadius: 10)],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            title,
+            label,
             style: const TextStyle(
+              color: Color(0xFF6DFFF0),
               fontSize: 10,
-              letterSpacing: 2.2,
-              color: Colors.white54,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w900,
+              height: 1,
             ),
           ),
-          const SizedBox(height: 10),
-          primary,
-          const SizedBox(height: 10),
-          secondary,
+          Text(
+            sublabel,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 7,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+class _PedalMeter extends StatelessWidget {
+  const _PedalMeter({
+    required this.size,
+  });
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox.square(
+        dimension: size,
+        child: CustomPaint(painter: _PedalMeterPainter()),
+      ),
+    );
+  }
+}
+
+class _MiniMapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final cyan = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xAA37F5DF);
+    final dim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.white.withValues(alpha: 0.24);
+
+    canvas.drawCircle(center, radius * 0.74, dim);
+    canvas.drawLine(Offset(center.dx, radius * 0.18), Offset(center.dx, radius * 1.55), dim);
+    canvas.drawLine(Offset(radius * 0.25, center.dy), Offset(radius * 1.55, center.dy), dim);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius * 0.82),
+      -math.pi * 0.70,
+      math.pi * 1.25,
+      false,
+      cyan,
+    );
+
+    final route = Path()
+      ..moveTo(radius * 0.58, radius * 0.18)
+      ..quadraticBezierTo(radius * 1.03, radius * 0.62, radius * 0.87, radius * 1.06)
+      ..quadraticBezierTo(radius * 0.78, radius * 1.34, radius * 1.18, radius * 1.65);
+    canvas.drawPath(
+      route,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: 0.62),
+    );
+
+    final arrow = Path()
+      ..moveTo(center.dx, center.dy - radius * 0.20)
+      ..lineTo(center.dx - radius * 0.14, center.dy + radius * 0.18)
+      ..lineTo(center.dx + radius * 0.14, center.dy + radius * 0.18)
+      ..close();
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..color = const Color(0xFFFFE84B)
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _SpeedGaugePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = size.width * 0.53;
+    final center = Offset(size.width * 0.57, size.height * 0.57);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const start = math.pi * 0.82;
+    const sweep = math.pi * 1.18;
+
+    final glowPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.butt
+      ..color = const Color(0x5537F5DF)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawArc(rect, start, sweep * 0.68, false, glowPaint);
+
+    for (var i = 0; i < 23; i++) {
+      final segmentStart = start + (sweep / 24) * i;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = i > 17 ? 8 : 5
+        ..strokeCap = StrokeCap.butt
+        ..color = i > 17
+            ? const Color(0xFFFF2E48)
+            : i % 5 == 0
+                ? Colors.black.withValues(alpha: 0.78)
+                : const Color(0xFF39F7DE);
+      canvas.drawArc(rect, segmentStart, sweep / 38, false, paint);
+    }
+
+    final needleAngle = start + sweep * 0.62;
+    final needleEnd = Offset(
+      center.dx + math.cos(needleAngle) * radius * 0.72,
+      center.dy + math.sin(needleAngle) * radius * 0.72,
+    );
+    canvas.drawLine(
+      center,
+      needleEnd,
+      Paint()
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(0xFFFF2E48),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PedalMeterPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = const Color(0x9937F5DF);
+    final glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9
+      ..color = const Color(0x4437F5DF)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9);
+
+    canvas.drawCircle(center, radius * 0.82, glow);
+    canvas.drawCircle(center, radius * 0.82, ring);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius * 0.96),
+      -math.pi * 0.68,
+      math.pi * 0.62,
+      false,
+      ring..strokeWidth = 5,
+    );
+
+    final dotPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.white.withValues(alpha: 0.48);
+    for (var row = 0; row < 4; row++) {
+      for (var col = 0; col < 3; col++) {
+        canvas.drawCircle(
+          Offset(center.dx - radius * 0.22 + col * radius * 0.22, center.dy - radius * 0.28 + row * radius * 0.18),
+          radius * 0.035,
+          dotPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _ActionDock extends StatelessWidget {
@@ -796,39 +937,99 @@ class _ActionDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xC009111D),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x2236E6C5)),
-      ),
-      child: Row(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ControlButton(
+          icon: Icons.power_settings_new,
+          label: 'STOP',
+          onDown: onStop,
+          onUp: () {},
+          danger: true,
+          compact: true,
+          width: buttonSize,
+          height: buttonSize,
+          iconSize: buttonSize * 0.48,
+          circular: true,
+          showLabel: false,
+        ),
+        const SizedBox(width: 14),
+        ControlButton(
+          icon: Icons.lightbulb_outline,
+          label: 'LIGHT',
+          onDown: onLight,
+          onUp: () {},
+          compact: true,
+          width: buttonSize,
+          height: buttonSize,
+          iconSize: buttonSize * 0.46,
+          circular: true,
+          showLabel: false,
+        ),
+      ],
+    );
+  }
+}
+
+class _RaceControlPair extends StatelessWidget {
+  const _RaceControlPair({
+    required this.vertical,
+    required this.spacing,
+    required this.first,
+    required this.second,
+  });
+
+  final bool vertical;
+  final double spacing;
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    if (vertical) {
+      return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ControlButton(
-            icon: Icons.power_settings_new,
-            label: 'STOP',
-            onDown: onStop,
-            onUp: () {},
-            danger: true,
-            compact: true,
-            width: buttonSize,
-            height: buttonSize,
-            iconSize: buttonSize * 0.42,
-            labelSize: 10,
-          ),
-          const SizedBox(width: 10),
-          ControlButton(
-            icon: Icons.lightbulb_outline,
-            label: 'LIGHT',
-            onDown: onLight,
-            onUp: () {},
-            compact: true,
-            width: buttonSize,
-            height: buttonSize,
-            iconSize: buttonSize * 0.40,
-            labelSize: 10,
+          first,
+          SizedBox(height: spacing),
+          second,
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        first,
+        SizedBox(width: spacing),
+        second,
+      ],
+    );
+  }
+}
+
+class _FullScreenCamera extends StatelessWidget {
+  const _FullScreenCamera();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const CameraView(),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withValues(alpha: 0.22),
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.18),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
           ),
         ],
       ),
