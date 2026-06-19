@@ -48,21 +48,27 @@ class GyroController extends ChangeNotifier {
   Future<void> setEnabled(bool enabled) async {
     if (_enabled == enabled) return;
     _enabled = enabled;
+    _baseline = null;
+    _debounce?.cancel();
+    _debounce = null;
+    _tiltX = 0;
+    _tiltY = 0;
+    _drive = DriveDirection.neutral;
+    _steer = SteerDirection.neutral;
     notifyListeners();
 
     if (enabled) {
-      _baseline = null;
-      _subscription ??= accelerometerEventStream().listen(_handleAccelerometer);
-    } else {
+      await _motion?.stopAll();
       await _subscription?.cancel();
       _subscription = null;
-      _baseline = null;
-      _debounce?.cancel();
-      _drive = DriveDirection.neutral;
-      _steer = SteerDirection.neutral;
-      await _motion?.stopDrive();
-      await _motion?.stopSteer();
+      _subscription = accelerometerEventStream().listen(_handleAccelerometer);
+      return;
     }
+
+    final subscription = _subscription;
+    _subscription = null;
+    await subscription?.cancel();
+    await _motion?.stopAll();
   }
 
   void calibrate() {
@@ -88,11 +94,17 @@ class GyroController extends ChangeNotifier {
       if (!_enabled) return;
       if (nextDrive != _drive) {
         _drive = nextDrive;
-        _motion?.setDrive(nextDrive);
+        final motion = _motion;
+        if (motion != null) {
+          unawaited(motion.setDrive(nextDrive));
+        }
       }
       if (nextSteer != _steer) {
         _steer = nextSteer;
-        _motion?.setSteer(nextSteer);
+        final motion = _motion;
+        if (motion != null) {
+          unawaited(motion.setSteer(nextSteer));
+        }
       }
       notifyListeners();
     });

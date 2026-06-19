@@ -194,7 +194,7 @@ void startCameraServer() {
   config.server_port = 80;
   config.ctrl_port = 32768;
   config.stack_size = 8192;
-  config.max_uri_handlers = 16;
+  config.max_uri_handlers = 24;
   config.lru_purge_enable = true;
 
   httpd_uri_t ping_uri = {.uri = "/ping", .method = HTTP_GET, .handler = ping_handler, .user_ctx = NULL};
@@ -215,6 +215,15 @@ void startCameraServer() {
 
   httpd_uri_t stream_uri = {.uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL};
 
+  // Compatibility aliases used by the older working firmware bundle.
+  httpd_uri_t go_uri = {.uri = "/go", .method = HTTP_GET, .handler = forward_handler, .user_ctx = NULL};
+  httpd_uri_t back_uri = {.uri = "/back", .method = HTTP_GET, .handler = backward_handler, .user_ctx = NULL};
+  httpd_uri_t left_uri = {.uri = "/left", .method = HTTP_GET, .handler = steerleft_handler, .user_ctx = NULL};
+  httpd_uri_t right_uri = {.uri = "/right", .method = HTTP_GET, .handler = steerright_handler, .user_ctx = NULL};
+  httpd_uri_t stop_uri = {.uri = "/stop", .method = HTTP_GET, .handler = stopall_handler, .user_ctx = NULL};
+  httpd_uri_t ledon_uri = {.uri = "/ledon", .method = HTTP_GET, .handler = lighton_handler, .user_ctx = NULL};
+  httpd_uri_t ledoff_uri = {.uri = "/ledoff", .method = HTTP_GET, .handler = lightoff_handler, .user_ctx = NULL};
+
   ra_filter_init(&ra_filter, 20);
 
   Serial.printf("Starting API server on port: '%d'\n", config.server_port);
@@ -234,6 +243,14 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &lighton_uri);
     httpd_register_uri_handler(camera_httpd, &lightoff_uri);
     httpd_register_uri_handler(camera_httpd, &lighttoggle_uri);
+
+    httpd_register_uri_handler(camera_httpd, &go_uri);
+    httpd_register_uri_handler(camera_httpd, &back_uri);
+    httpd_register_uri_handler(camera_httpd, &left_uri);
+    httpd_register_uri_handler(camera_httpd, &right_uri);
+    httpd_register_uri_handler(camera_httpd, &stop_uri);
+    httpd_register_uri_handler(camera_httpd, &ledon_uri);
+    httpd_register_uri_handler(camera_httpd, &ledoff_uri);
   }
 
   config.server_port = 81;

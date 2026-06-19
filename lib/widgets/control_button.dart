@@ -10,6 +10,10 @@ class ControlButton extends StatefulWidget {
     this.accent = const Color(0xFF1DE9B6),
     this.danger = false,
     this.compact = false,
+    this.width,
+    this.height,
+    this.iconSize,
+    this.labelSize,
   });
 
   final IconData icon;
@@ -19,6 +23,10 @@ class ControlButton extends StatefulWidget {
   final Color accent;
   final bool danger;
   final bool compact;
+  final double? width;
+  final double? height;
+  final double? iconSize;
+  final double? labelSize;
 
   @override
   State<ControlButton> createState() => _ControlButtonState();
@@ -60,8 +68,8 @@ class _ControlButtonState extends State<ControlButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
-        width: widget.compact ? 82 : 104,
-        height: widget.compact ? 82 : 104,
+        width: widget.width ?? (widget.compact ? 72 : 100),
+        height: widget.height ?? (widget.compact ? 72 : 100),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(24),
@@ -77,12 +85,12 @@ class _ControlButtonState extends State<ControlButton> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(widget.icon, size: widget.compact ? 32 : 38, color: Colors.white),
-            const SizedBox(height: 6),
+            Icon(widget.icon, size: widget.iconSize ?? (widget.compact ? 28 : 36), color: Colors.white),
+            SizedBox(height: widget.compact ? 4 : 6),
             Text(
               widget.label,
               style: TextStyle(
-                fontSize: widget.compact ? 11 : 12,
+                fontSize: widget.labelSize ?? (widget.compact ? 10 : 12),
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.0,
                 color: Colors.white70,

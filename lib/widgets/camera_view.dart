@@ -43,13 +43,16 @@ class CameraView extends StatelessWidget {
           );
         }
 
-        return RepaintBoundary(
-          child: Image(
-            image: MemoryImage(frame),
-            gaplessPlayback: true,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.low,
-            errorBuilder: (context, _, __) => const SizedBox.expand(),
+        return SizedBox.expand(
+          child: RepaintBoundary(
+            child: Image(
+              image: MemoryImage(frame),
+              gaplessPlayback: true,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (context, _, __) => const SizedBox.expand(),
+            ),
           ),
         );
       },

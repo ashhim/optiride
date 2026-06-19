@@ -65,7 +65,8 @@ class StreamService extends ChangeNotifier {
         _status = 'connecting';
         notifyListeners();
 
-        final request = await _client.getUrl(uri.resolve('/stream'));
+        final streamUri = uri.replace(port: 81, path: '/stream');
+        final request = await _client.getUrl(streamUri);
         request.followRedirects = false;
         request.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         request.headers.set(HttpHeaders.connectionHeader, 'keep-alive');

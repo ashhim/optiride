@@ -13,6 +13,7 @@ class SettingsPanel extends StatelessWidget {
     required this.onSensitivityChanged,
     required this.gyroDeadZone,
     required this.onDeadZoneChanged,
+    required this.onCalibrateGyro,
   });
 
   final TextEditingController ipController;
@@ -25,6 +26,7 @@ class SettingsPanel extends StatelessWidget {
   final ValueChanged<double> onSensitivityChanged;
   final double gyroDeadZone;
   final ValueChanged<double> onDeadZoneChanged;
+  final VoidCallback onCalibrateGyro;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +93,12 @@ class SettingsPanel extends StatelessWidget {
                 onChanged: onGyroChanged,
                 title: const Text('Gyro control'),
                 subtitle: const Text('Tilt to drive and steer'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onCalibrateGyro,
+                icon: const Icon(Icons.center_focus_strong),
+                label: const Text('CALIBRATE GYRO'),
               ),
               const SizedBox(height: 8),
               Row(
