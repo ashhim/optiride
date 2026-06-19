@@ -1,11 +1,10 @@
 // Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-// Updated for clean desktop UI, keyboard control, 2-motor drive, and stable streaming
+// ESP32-CAM API + MJPEG stream only.
 
 #include "esp_http_server.h"
 #include "esp_timer.h"
 #include "esp_camera.h"
 #include "img_converters.h"
-#include "camera_index.h"
 #include "Arduino.h"
 
 extern void MotorStopAll();
@@ -27,11 +26,6 @@ typedef struct {
   int sum;
   int *values;
 } ra_filter_t;
-
-typedef struct {
-  httpd_req_t *req;
-  size_t len;
-} jpg_chunking_t;
 
 #define PART_BOUNDARY "123456789000000000000987654321"
 static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
@@ -57,44 +51,6 @@ static int ra_filter_run(ra_filter_t *filter, int value) {
   filter->index = (filter->index + 1) % filter->size;
   if (filter->count < filter->size) filter->count++;
   return filter->sum / filter->count;
-}
-
-static size_t jpg_encode_stream(void *arg, size_t index, const void *data, size_t len) {
-  jpg_chunking_t *j = (jpg_chunking_t *)arg;
-  if (!index) j->len = 0;
-  if (httpd_resp_send_chunk(j->req, (const char *)data, len) != ESP_OK) {
-    return 0;
-  }
-  j->len += len;
-  return len;
-}
-
-static esp_err_t capture_handler(httpd_req_t *req) {
-  camera_fb_t *fb = NULL;
-  esp_err_t res = ESP_OK;
-
-  fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Camera capture failed");
-    httpd_resp_send_500(req);
-    return ESP_FAIL;
-  }
-
-  httpd_resp_set_type(req, "image/jpeg");
-  httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  httpd_resp_set_hdr(req, "Pragma", "no-cache");
-
-  if (fb->format == PIXFORMAT_JPEG) {
-    res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-  } else {
-    jpg_chunking_t jchunk = {req, 0};
-    res = frame2jpg_cb(fb, 80, jpg_encode_stream, &jchunk) ? ESP_OK : ESP_FAIL;
-    httpd_resp_send_chunk(req, NULL, 0);
-  }
-
-  esp_camera_fb_return(fb);
-  return res;
 }
 
 static esp_err_t stream_handler(httpd_req_t *req) {
@@ -160,13 +116,6 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
   last_frame = 0;
   return res;
-}
-
-static esp_err_t index_handler(httpd_req_t *req) {
-  httpd_resp_set_type(req, "text/html; charset=utf-8");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  httpd_resp_set_hdr(req, "Pragma", "no-cache");
-  return httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t ping_handler(httpd_req_t *req) {
@@ -240,37 +189,6 @@ static esp_err_t lighttoggle_handler(httpd_req_t *req) {
   return httpd_resp_send(req, light_state ? "1" : "0", 1);
 }
 
-// Compatibility aliases for older page/requests
-static esp_err_t go_handler(httpd_req_t *req) {
-  return forward_handler(req);
-}
-
-static esp_err_t back_handler(httpd_req_t *req) {
-  return backward_handler(req);
-}
-
-static esp_err_t left_handler(httpd_req_t *req) {
-  return steerleft_handler(req);
-}
-
-static esp_err_t right_handler(httpd_req_t *req) {
-  return steerright_handler(req);
-}
-
-static esp_err_t stop_handler(httpd_req_t *req) {
-  MotorStopAll();
-  httpd_resp_set_type(req, "text/plain");
-  return httpd_resp_send(req, "OK", 2);
-}
-
-static esp_err_t ledon_handler(httpd_req_t *req) {
-  return lighton_handler(req);
-}
-
-static esp_err_t ledoff_handler(httpd_req_t *req) {
-  return lightoff_handler(req);
-}
-
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
@@ -279,7 +197,6 @@ void startCameraServer() {
   config.max_uri_handlers = 16;
   config.lru_purge_enable = true;
 
-  httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_handler, .user_ctx = NULL};
   httpd_uri_t ping_uri = {.uri = "/ping", .method = HTTP_GET, .handler = ping_handler, .user_ctx = NULL};
 
   httpd_uri_t forward_uri = {.uri = "/forward", .method = HTTP_GET, .handler = forward_handler, .user_ctx = NULL};
@@ -296,23 +213,12 @@ void startCameraServer() {
   httpd_uri_t lightoff_uri = {.uri = "/lightoff", .method = HTTP_GET, .handler = lightoff_handler, .user_ctx = NULL};
   httpd_uri_t lighttoggle_uri = {.uri = "/lighttoggle", .method = HTTP_GET, .handler = lighttoggle_handler, .user_ctx = NULL};
 
-  httpd_uri_t capture_uri = {.uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL};
   httpd_uri_t stream_uri = {.uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL};
-
-  // Compatibility routes
-  httpd_uri_t go_uri = {.uri = "/go", .method = HTTP_GET, .handler = go_handler, .user_ctx = NULL};
-  httpd_uri_t back_uri = {.uri = "/back", .method = HTTP_GET, .handler = back_handler, .user_ctx = NULL};
-  httpd_uri_t left_uri = {.uri = "/left", .method = HTTP_GET, .handler = left_handler, .user_ctx = NULL};
-  httpd_uri_t right_uri = {.uri = "/right", .method = HTTP_GET, .handler = right_handler, .user_ctx = NULL};
-  httpd_uri_t stop_uri = {.uri = "/stop", .method = HTTP_GET, .handler = stop_handler, .user_ctx = NULL};
-  httpd_uri_t ledon_uri = {.uri = "/ledon", .method = HTTP_GET, .handler = ledon_handler, .user_ctx = NULL};
-  httpd_uri_t ledoff_uri = {.uri = "/ledoff", .method = HTTP_GET, .handler = ledoff_handler, .user_ctx = NULL};
 
   ra_filter_init(&ra_filter, 20);
 
-  Serial.printf("Starting web server on port: '%d'\n", config.server_port);
+  Serial.printf("Starting API server on port: '%d'\n", config.server_port);
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
-    httpd_register_uri_handler(camera_httpd, &index_uri);
     httpd_register_uri_handler(camera_httpd, &ping_uri);
 
     httpd_register_uri_handler(camera_httpd, &forward_uri);
@@ -328,17 +234,6 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &lighton_uri);
     httpd_register_uri_handler(camera_httpd, &lightoff_uri);
     httpd_register_uri_handler(camera_httpd, &lighttoggle_uri);
-
-    httpd_register_uri_handler(camera_httpd, &capture_uri);
-
-    // Compatibility
-    httpd_register_uri_handler(camera_httpd, &go_uri);
-    httpd_register_uri_handler(camera_httpd, &back_uri);
-    httpd_register_uri_handler(camera_httpd, &left_uri);
-    httpd_register_uri_handler(camera_httpd, &right_uri);
-    httpd_register_uri_handler(camera_httpd, &stop_uri);
-    httpd_register_uri_handler(camera_httpd, &ledon_uri);
-    httpd_register_uri_handler(camera_httpd, &ledoff_uri);
   }
 
   config.server_port = 81;

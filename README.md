@@ -1,16 +1,35 @@
-# optiride
+# OptiRide Controller
 
-A new Flutter project.
+Flutter controller app for an ESP32-CAM car over LAN.
 
-## Getting Started
+## What it does
 
-This project is a starting point for a Flutter application.
+- Manual ESP32 IP entry
+- Direct HTTP control over the local network
+- MJPEG camera preview from `http://<ip>:81/stream`
+- Drive, steer, light, emergency stop, keyboard, joystick, and gyro control
+- No cloud, no backend, no relay service
+- ESP32 firmware serves only API endpoints and the camera stream
 
-A few resources to get you started if this is your first Flutter project:
+## Firmware routes
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+The app talks to the firmware using these GET endpoints:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `/ping`
+- `/stream`
+- `/forward`
+- `/backward`
+- `/steerleft`
+- `/steerright`
+- `/stopdrive`
+- `/stopsteer`
+- `/stopall`
+- `/lighton`
+- `/lightoff`
+- `/lighttoggle`
+
+## Notes
+
+- Android cleartext HTTP is enabled because the device is accessed over LAN.
+- The current Flutter implementation targets mobile and desktop. Web is not a supported target for the direct `dart:io` streaming path.
+
